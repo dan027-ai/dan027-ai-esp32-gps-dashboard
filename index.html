@@ -36,7 +36,7 @@
     <div id="app" class="max-w-6xl mx-auto">
         <header class="text-center mb-10">
             <h1 class="text-4xl font-extrabold text-gray-800">Live GPS Tracker Dashboard (REST API)</h1>
-            <p class="text-lg text-gray-500 mt-2">Pulls data from local Node.js server every 3 seconds.</p>
+            <p class="text-lg text-gray-500 mt-2">Pulls data from hosted Node.js server every 3 seconds.</p>
         </header>
 
         <!-- API Key and Server URL Configuration Section -->
@@ -47,8 +47,10 @@
             <div class="space-y-4 mb-6">
                 <!-- Server URL Input -->
                 <div>
-                    <label for="server-url-input" class="block text-sm font-medium text-gray-700 mb-1">REST API Server URL (e.g., http://192.168.1.10:3000)</label>
-                    <input type="text" id="server-url-input" placeholder="http://localhost:3000"
+                    <!-- UPDATED LABEL HINT -->
+                    <label for="server-url-input" class="block text-sm font-medium text-gray-700 mb-1">REST API Server URL (e.g., https://esp32-rest-backend.onrender.com)</label>
+                    <!-- UPDATED PLACEHOLDER -->
+                    <input type="text" id="server-url-input" placeholder="https://esp32-rest-backend.onrender.com"
                         class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm">
                 </div>
 
@@ -113,7 +115,7 @@
                             class="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition duration-150 shadow-md flex items-center space-x-2 active:scale-[0.98]">
                         <!-- SVG icon for siren/alarm -->
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1.414a1 1 0 01.293.707l.636 1.347a1 1 0 001.096.64l2.062-.303a1 1 0 011.168.966v.831a1 1 0 01-.197.604l-.846.846a1 1 0 00-.293.707v1.414a1 1 0 00.293.707l.846.846a1 1 0 01.197.604v.831a1 1 0 01-1.168.966l-2.062-.303a1 1 0 00-1.096.64l-.636 1.347a1 1 0 01-.293.707V17a1 1 0 01-2 0v-1.414a1 1 0 01-.293-.707l-.636-1.347a1 1 0 00-1.096-.64l-2.062.303a1 1 0 01-1.168-.966v-.831a1 1 0 01.197-.604l.846-.846a1 1 0 00.293-.707v-1.414a1 1 0 00-.293-.707l-.846-.846a1 1 0 01-.197-.604V7.828a1 1 0 011.168-.966l2.062.303a1 1 0 001.096-.64l.636-1.347A1 1 0 019 3v-1a1 1 0 011-1zM10 8a2 2 0 100 4 2 2 0 000-4z" clip-rule="evenodd" />
+                            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1.414a1 1 0 01.293.707l.636 1.347a1 1 0 001.096.64l2.062-.303a1 1 0 011.168.966v.831a1 1 0 01-.197.604l-.846.846a1 1 0 00-.293.707v1.414a1 1 0 00.293.707l.846.846a1 1 0 01.197.604v.831a1 1 0 01-1.168.966l-2.062-.303a1 1 0 00-1.096.64l-.636 1.347a1 1 0 01-.293.707V17a1 1 0 01-2 0v-1.414a1 1 0 01-.293-.707l-.636-1.347a1 1 0 00-1.096-.64l-2.062.303a1 1 0 01-1.168-.966v-.831a1 1 0 01.197-.604l.846-.846a1 1 0 00.293-.707v-1.414a1 1 0 00-.293-.707l-.846-.846a1 1 0 01-.197-.604V7.828a1 1 0 011.168-.966l2.062.303a1 1 0 001.096-.64l.636-1.347A1 1 0 019 3v-1a1 1 0 011-1zM10 8a2 2 0 100 4 2 2 0 000-4z" clip-rule="evenodd" />
                         </svg>
                         <span>TRIGGER ALARM</span>
                     </button>
@@ -129,7 +131,7 @@
             <!-- Status Messages (Repurposed for initial load) -->
             <div id="status-message" class="mt-8 p-4 bg-yellow-100 border border-yellow-300 rounded-lg text-yellow-800">
                 <p id="connection-status">
-                    Attempting to connect to REST API (http://localhost:3000)... Waiting for data...
+                    Attempting to connect to REST API (https://esp32-rest-backend.onrender.com)... Waiting for data...
                 </p>
             </div>
         </div>
@@ -137,7 +139,8 @@
 
     <script>
         // --- Configuration ---
-        const DEFAULT_SERVER_URL = 'http://localhost:3000';
+        // UPDATED DEFAULT URL
+        const DEFAULT_SERVER_URL = 'https://esp32-rest-backend.onrender.com';
         const TRACKER_DEVICE_ID = 'VX0dFVvmu1QSpQdvj1p74iyfx9n1'; 
         const POLLING_INTERVAL_MS = 3000; // Poll data every 3 seconds
 
@@ -169,7 +172,8 @@
 
             // Load configuration from session storage
             apiKey = sessionStorage.getItem('googleMapsApiKey');
-            serverUrl = sessionStorage.getItem('serverUrl') || DEFAULT_SERVER_URL;
+            // The serverUrl now defaults to the new constant
+            serverUrl = sessionStorage.getItem('serverUrl') || DEFAULT_SERVER_URL; 
 
             // Pre-fill inputs
             document.getElementById('api-key-input').value = apiKey || '';
@@ -297,7 +301,7 @@
                     alarmButtonEl.classList.add('bg-red-600', 'hover:bg-red-700');
                     alarmButtonEl.innerHTML = `
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1.414a1 1 0 01.293.707l.636 1.347a1 1 0 001.096.64l2.062-.303a1 1 0 011.168.966v.831a1 1 0 01-.197.604l-.846.846a1 1 0 00-.293.707v1.414a1 1 0 00.293.707l.846.846a1 1 0 01.197.604v.831a1 1 0 01-1.168.966l-2.062-.303a1 1 0 00-1.096.64l-.636 1.347a1 1 0 01-.293.707V17a1 1 0 01-2 0v-1.414a1 1 0 01-.293-.707l-.636-1.347a1 1 0 00-1.096-.64l-2.062.303a1 1 0 01-1.168-.966v-.831a1 1 0 01.197-.604l.846-.846a1 1 0 00.293-.707v-1.414a1 1 0 00-.293-.707l-.846-.846a1 1 0 01-.197-.604V7.828a1 1 0 011.168-.966l2.062.303a1 1 0 001.096-.64l.636-1.347A1 1 0 019 3v-1a1 1 0 011-1zM10 8a2 2 0 100 4 2 2 0 000-4z" clip-rule="evenodd" />
+                            <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1.414a1 1 0 01.293.707l.636 1.347a1 1 0 001.096.64l2.062-.303a1 1 0 011.168.966v.831a1 1 0 01-.197.604l-.846.846a1 1 0 00-.293.707v1.414a1 1 0 00.293.707l.846.846a1 1 0 01.197.604v.831a1 1 0 01-1.168.966l-2.062-.303a1 1 0 00-1.096.64l-.636 1.347a1 1 0 01-.293.707V17a1 1 0 01-2 0v-1.414a1 1 0 01-.293-.707l-.636-1.347a1 1 0 00-1.096-.64l-2.062.303a1 1 0 01-1.168-.966v-.831a1 1 0 01.197-.604l.846-.846a1 1 0 00.293-.707v-1.414a1 1 0 00-.293-.707l-.846-.846a1 1 0 01-.197-.604V7.828a1 1 0 011.168-.966l2.062.303a1 1 0 001.096-.64l.636-1.347A1 1 0 019 3v-1a1 1 0 011-1zM10 8a2 2 0 100 4 2 2 0 000-4z" clip-rule="evenodd" />
                         </svg>
                         <span>TRIGGER ALARM</span>
                     `;
@@ -403,7 +407,7 @@
             } catch (error) {
                 // This typically catches network errors (server not running) or JSON parsing errors
                 console.error("Fetch Data Error:", error);
-                connectionStatusEl.innerHTML = `🚨 Connection Error: Cannot reach server at <span class="font-bold">${serverUrl}</span>. Is node server.js running?`;
+                connectionStatusEl.innerHTML = `🚨 Connection Error: Cannot reach server at <span class="font-bold">${serverUrl}</span>. Is your ESP32 tracker sending data to the server?`;
                 statusMessageEl.classList.remove('hidden');
                 // Attempt to retry connection status check on the next interval
             }
