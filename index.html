@@ -39,18 +39,32 @@
             <p class="text-lg text-gray-500 mt-2">Pulls data from local Node.js server every 3 seconds.</p>
         </header>
 
-        <!-- API Key Configuration Section (STAYS FOR GOOGLE MAPS) -->
+        <!-- API Key and Server URL Configuration Section -->
         <div id="config-section" class="bg-white p-6 rounded-xl shadow-lg mb-8 border border-blue-200">
-            <h2 class="text-2xl font-semibold mb-4 text-blue-600">Maps API Key Setup</h2>
-            <p class="mb-4 text-gray-600">Paste your **Google Maps API key** here. After pasting, click "Save & Load Map" to initialize the map view.</p>
-            <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-                <input type="password" id="api-key-input" placeholder="Paste your Google Maps API Key here..."
-                        class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm">
-                <button onclick="saveApiKey()" id="save-button"
-                        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-150 shadow-md">
-                    Save & Load Map
-                </button>
+            <h2 class="text-2xl font-semibold mb-4 text-blue-600">Configuration</h2>
+            <p class="mb-4 text-gray-600">Configure your **REST API Server URL** and **Google Maps API Key** here. Both are required.</p>
+            
+            <div class="space-y-4 mb-6">
+                <!-- Server URL Input -->
+                <div>
+                    <label for="server-url-input" class="block text-sm font-medium text-gray-700 mb-1">REST API Server URL (e.g., http://192.168.1.10:3000)</label>
+                    <input type="text" id="server-url-input" placeholder="http://localhost:3000"
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm">
+                </div>
+
+                <!-- Google Maps API Key Input -->
+                <div>
+                    <label for="api-key-input" class="block text-sm font-medium text-gray-700 mb-1">Google Maps API Key</label>
+                    <input type="password" id="api-key-input" placeholder="Paste your Google Maps API Key here..."
+                        class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm">
+                </div>
             </div>
+
+            <button onclick="saveConfig()" id="save-button"
+                class="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-150 shadow-md">
+                Save Settings & Load Map
+            </button>
+            
             <p id="config-message" class="mt-3 text-sm text-red-500"></p>
         </div>
 
@@ -123,13 +137,14 @@
 
     <script>
         // --- Configuration ---
-        const SERVER_URL = 'http://localhost:3000';
+        const DEFAULT_SERVER_URL = 'http://localhost:3000';
         const TRACKER_DEVICE_ID = 'VX0dFVvmu1QSpQdvj1p74iyfx9n1'; 
         const POLLING_INTERVAL_MS = 3000; // Poll data every 3 seconds
 
         let map;
         let marker;
         let apiKey;
+        let serverUrl; // This will hold the dynamic server URL
         let dataPollingTimer; // Timer for the periodic data refresh
 
         // Element references
@@ -146,25 +161,33 @@
         const buzzerStateDisplayEl = document.getElementById('buzzer-state-display');
         const alarmButtonEl = document.getElementById('alarm-trigger-button'); 
 
-
         document.addEventListener('DOMContentLoaded', initializeDashboard);
 
         function initializeDashboard() {
             // Display the Device ID we are tracking
             document.getElementById('user-id-display').textContent = TRACKER_DEVICE_ID;
 
-            // Load API Key from session storage and try to load map
+            // Load configuration from session storage
             apiKey = sessionStorage.getItem('googleMapsApiKey');
+            serverUrl = sessionStorage.getItem('serverUrl') || DEFAULT_SERVER_URL;
+
+            // Pre-fill inputs
+            document.getElementById('api-key-input').value = apiKey || '';
+            document.getElementById('server-url-input').value = serverUrl;
+
             if (apiKey) {
-                document.getElementById('api-key-input').value = apiKey;
                 loadGoogleMapsScript();
                 document.getElementById('config-section').classList.add('hidden');
                 document.getElementById('dashboard-content').classList.remove('hidden');
             } else {
                 document.getElementById('config-section').classList.remove('hidden');
                 document.getElementById('dashboard-content').classList.add('hidden');
-                document.getElementById('config-message').textContent = 'Please enter your Google Maps API Key to proceed.';
+                document.getElementById('config-message').textContent = 'Please enter your configuration details to proceed.';
             }
+
+            // Update status message with current server URL
+            connectionStatusEl.innerHTML = `Attempting to connect to REST API (<span class="font-bold">${serverUrl}</span>)... Waiting for data...`;
+
 
             // Initialize alarm button UI state to READY
             updateAlarmUI(false, 'READY');
@@ -174,6 +197,7 @@
 
         window.loadGoogleMapsScript = function() {
             if (!apiKey) return;
+            // Prevent duplicate script loading
             if (document.querySelector(`script[src*="maps.googleapis.com/maps/api/js"]`)) return;
 
             const script = document.createElement('script');
@@ -218,17 +242,31 @@
 
         // --- User Interaction ---
 
-        window.saveApiKey = function() {
-            const input = document.getElementById('api-key-input').value.trim();
-            if (input) {
-                sessionStorage.setItem('googleMapsApiKey', input);
-                apiKey = input;
+        /**
+         * Saves both the API Key and the Server URL to session storage
+         * and attempts to load the map and start data polling.
+         */
+        window.saveConfig = function() {
+            const newApiKey = document.getElementById('api-key-input').value.trim();
+            const newServerUrl = document.getElementById('server-url-input').value.trim();
+
+            if (newApiKey && newServerUrl) {
+                sessionStorage.setItem('googleMapsApiKey', newApiKey);
+                sessionStorage.setItem('serverUrl', newServerUrl);
+
+                apiKey = newApiKey;
+                serverUrl = newServerUrl;
+                
                 document.getElementById('config-message').textContent = '';
                 document.getElementById('config-section').classList.add('hidden');
                 document.getElementById('dashboard-content').classList.remove('hidden');
                 loadGoogleMapsScript();
+                
+                // Update the status message immediately with the new URL
+                connectionStatusEl.innerHTML = `Attempting to connect to REST API (<span class="font-bold">${serverUrl}</span>)... Waiting for data...`;
+
             } else {
-                document.getElementById('config-message').textContent = 'API Key cannot be empty.';
+                document.getElementById('config-message').textContent = 'Both the Server URL and the Google Maps API Key are required.';
             }
         }
 
@@ -299,7 +337,8 @@
             updateAlarmUI(true, 'TRIGGERING...');
 
             try {
-                const url = `${SERVER_URL}/api/command/${TRACKER_DEVICE_ID}`;
+                // Use the configured serverUrl
+                const url = `${serverUrl}/api/command/${TRACKER_DEVICE_ID}`;
                 
                 const response = await fetch(url, {
                     method: 'POST',
@@ -342,7 +381,8 @@
          * Endpoint: GET /api/data/{device_id}
          */
         async function fetchLatestData() {
-            const url = `${SERVER_URL}/api/data/${TRACKER_DEVICE_ID}`;
+            // Use the configured serverUrl
+            const url = `${serverUrl}/api/data/${TRACKER_DEVICE_ID}`;
             
             try {
                 const response = await fetch(url);
@@ -350,7 +390,7 @@
                 if (!response.ok) {
                     if (response.status === 404) {
                         // 404 means no data yet, but server is running
-                        connectionStatusEl.textContent = 'Server connected, but no data received from the tracker yet.';
+                        connectionStatusEl.innerHTML = `Server connected to (<span class="font-bold">${serverUrl}</span>), but no data received from the tracker yet.`;
                         statusMessageEl.classList.remove('hidden');
                         return;
                     }
@@ -363,7 +403,7 @@
             } catch (error) {
                 // This typically catches network errors (server not running) or JSON parsing errors
                 console.error("Fetch Data Error:", error);
-                connectionStatusEl.textContent = `🚨 Connection Error: Cannot reach server at ${SERVER_URL}. Is node server.js running?`;
+                connectionStatusEl.innerHTML = `🚨 Connection Error: Cannot reach server at <span class="font-bold">${serverUrl}</span>. Is node server.js running?`;
                 statusMessageEl.classList.remove('hidden');
                 // Attempt to retry connection status check on the next interval
             }
@@ -413,7 +453,7 @@
 
             rssiDisplayEl.textContent = `${rssi} dBm`;
             timeDisplayEl.textContent = timestamp;
-            connectionStatusEl.textContent = `Connected to REST API. Last updated: ${new Date().toLocaleTimeString()}.`;
+            connectionStatusEl.innerHTML = `Connected to REST API (<span class="font-bold">${serverUrl}</span>). Last updated: ${new Date().toLocaleTimeString()}.`;
         }
 
     </script>
