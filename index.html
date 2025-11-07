@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Real-Time GPS Tracker (REST API)</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles for the map container and layout */
+        body {
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            background-color: #f7fafc; /* Tailwind gray-50 */
+        }
+        #map {
+            height: 500px; /* Default height */
+            width: 100%;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .data-card {
+            transition: all 0.3s ease;
+        }
+        /* Custom styles for the map container and layout */
+        @media (max-width: 640px) {
+            #map {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div id="app" class="max-w-6xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-gray-800">Live GPS Tracker Dashboard (REST API)</h1>
+            <p class="text-lg text-gray-500 mt-2">Pulls data from local Node.js server every 3 seconds.</p>
+        </header>
+
+        <!-- API Key Configuration Section (STAYS FOR GOOGLE MAPS) -->
+        <div id="config-section" class="bg-white p-6 rounded-xl shadow-lg mb-8 border border-blue-200">
+            <h2 class="text-2xl font-semibold mb-4 text-blue-600">Maps API Key Setup</h2>
+            <p class="mb-4 text-gray-600">Paste your **Google Maps API key** here. After pasting, click "Save & Load Map" to initialize the map view.</p>
+            <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
+                <input type="password" id="api-key-input" placeholder="Paste your Google Maps API Key here..."
+                        class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm">
+                <button onclick="saveApiKey()" id="save-button"
+                        class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition duration-150 shadow-md">
+                    Save & Load Map
+                </button>
+            </div>
+            <p id="config-message" class="mt-3 text-sm text-red-500"></p>
+        </div>
+
+        <!-- Main Dashboard Content -->
+        <div id="dashboard-content" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Data Card 1: Location -->
+                <div class="data-card bg-white p-6 rounded-xl shadow-lg border-l-4 border-green-500">
+                    <p class="text-lg text-gray-500">Last Reported Location</p>
+                    <p id="lat-display" class="text-3xl font-bold text-gray-800 mt-1">--</p>
+                    <p id="lng-display" class="text-3xl font-bold text-gray-800 mt-1">--</p>
+                </div>
+                <!-- Data Card 2: Signal Strength -->
+                <div class="data-card bg-white p-6 rounded-xl shadow-lg border-l-4 border-yellow-500">
+                    <p class="text-lg text-gray-500">Signal Strength (RSSI)</p>
+                    <p id="rssi-display" class="text-4xl font-bold text-gray-800 mt-1">-- dBm</p>
+                </div>
+                <!-- Data Card 3: Last Update Time -->
+                <div class="data-card bg-white p-6 rounded-xl shadow-lg border-l-4 border-indigo-500">
+                    <p class="text-lg text-gray-500">Last Updated</p>
+                    <p id="time-display" class="text-4xl font-bold text-gray-800 mt-1">--</p>
+                    <p class="text-xs text-gray-400 mt-1">
+                        Tracking Device ID: <span id="user-id-display" class="font-mono text-gray-500"></span>
+                    </p>
+                </div>
+            </div>
+            
+            <!-- UDM Warning Box -->
+            <div id="udm-warning" class="p-4 bg-red-100 border-l-4 border-red-500 rounded-lg text-red-800 font-medium hidden mb-8 shadow-md">
+                <p class="font-bold">🚨 FALLBACK ACTIVE: No valid GPS fix detected.</p>
+                <p class="text-sm mt-1">The tracker is reporting default coordinates. Map position is approximate until a new signal is acquired.</p>
+            </div>
+
+            <!-- Remote Control Panel (Updated with Trigger Button) -->
+            <div class="bg-white p-6 rounded-xl shadow-lg mb-8 border-l-4 border-red-500 flex justify-between items-center flex-wrap">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4 sm:mb-0">Remote Commands</h2>
+                
+                <div class="flex items-center space-x-4">
+                    <!-- Alarm Status Display -->
+                    <p id="buzzer-status-container" class="text-lg text-gray-600 font-medium">
+                        Alarm State: <span id="buzzer-state-display" class="font-bold text-green-500">READY</span>
+                    </p>
+                    
+                    <!-- Alarm Trigger Button -->
+                    <button id="alarm-trigger-button" onclick="triggerAlarm()"
+                            class="px-6 py-3 bg-red-600 text-white font-semibold rounded-lg hover:bg-red-700 transition duration-150 shadow-md flex items-center space-x-2 active:scale-[0.98]">
+                        <!-- SVG icon for siren/alarm -->
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1.414a1 1 0 01.293.707l.636 1.347a1 1 0 001.096.64l2.062-.303a1 1 0 011.168.966v.831a1 1 0 01-.197.604l-.846.846a1 1 0 00-.293.707v1.414a1 1 0 00.293.707l.846.846a1 1 0 01.197.604v.831a1 1 0 01-1.168.966l-2.062-.303a1 1 0 00-1.096.64l-.636 1.347a1 1 0 01-.293.707V17a1 1 0 01-2 0v-1.414a1 1 0 01-.293-.707l-.636-1.347a1 1 0 00-1.096-.64l-2.062.303a1 1 0 01-1.168-.966v-.831a1 1 0 01.197-.604l.846-.846a1 1 0 00.293-.707v-1.414a1 1 0 00-.293-.707l-.846-.846a1 1 0 01-.197-.604V7.828a1 1 0 011.168-.966l2.062.303a1 1 0 001.096-.64l.636-1.347A1 1 0 019 3v-1a1 1 0 011-1zM10 8a2 2 0 100 4 2 2 0 000-4z" clip-rule="evenodd" />
+                        </svg>
+                        <span>TRIGGER ALARM</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Map Container -->
+            <div class="bg-white p-4 rounded-xl shadow-lg">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-700">Live Map View</h2>
+                <div id="map"></div>
+            </div>
+
+            <!-- Status Messages (Repurposed for initial load) -->
+            <div id="status-message" class="mt-8 p-4 bg-yellow-100 border border-yellow-300 rounded-lg text-yellow-800">
+                <p id="connection-status">
+                    Attempting to connect to REST API (http://localhost:3000)... Waiting for data...
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const SERVER_URL = 'http://localhost:3000';
+        const TRACKER_DEVICE_ID = 'VX0dFVvmu1QSpQdvj1p74iyfx9n1'; 
+        const POLLING_INTERVAL_MS = 3000; // Poll data every 3 seconds
+
+        let map;
+        let marker;
+        let apiKey;
+        let dataPollingTimer; // Timer for the periodic data refresh
+
+        // Element references
+        const udmWarningEl = document.getElementById('udm-warning');
+        const latDisplayEl = document.getElementById('lat-display');
+        const lngDisplayEl = document.getElementById('lng-display');
+        const rssiDisplayEl = document.getElementById('rssi-display');
+        const timeDisplayEl = document.getElementById('time-display');
+        const statusMessageEl = document.getElementById('status-message');
+        const connectionStatusEl = document.getElementById('connection-status');
+        
+        // New alarm button element references
+        const buzzerStatusContainerEl = document.getElementById('buzzer-status-container');
+        const buzzerStateDisplayEl = document.getElementById('buzzer-state-display');
+        const alarmButtonEl = document.getElementById('alarm-trigger-button'); 
+
+
+        document.addEventListener('DOMContentLoaded', initializeDashboard);
+
+        function initializeDashboard() {
+            // Display the Device ID we are tracking
+            document.getElementById('user-id-display').textContent = TRACKER_DEVICE_ID;
+
+            // Load API Key from session storage and try to load map
+            apiKey = sessionStorage.getItem('googleMapsApiKey');
+            if (apiKey) {
+                document.getElementById('api-key-input').value = apiKey;
+                loadGoogleMapsScript();
+                document.getElementById('config-section').classList.add('hidden');
+                document.getElementById('dashboard-content').classList.remove('hidden');
+            } else {
+                document.getElementById('config-section').classList.remove('hidden');
+                document.getElementById('dashboard-content').classList.add('hidden');
+                document.getElementById('config-message').textContent = 'Please enter your Google Maps API Key to proceed.';
+            }
+
+            // Initialize alarm button UI state to READY
+            updateAlarmUI(false, 'READY');
+        }
+
+        // --- Google Maps Logic (Remains the same) ---
+
+        window.loadGoogleMapsScript = function() {
+            if (!apiKey) return;
+            if (document.querySelector(`script[src*="maps.googleapis.com/maps/api/js"]`)) return;
+
+            const script = document.createElement('script');
+            script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initMap`;
+            script.async = true;
+            script.defer = true;
+            script.onerror = () => {
+                document.getElementById('config-message').textContent = 'Error loading Google Maps script. Check your API key and network connection.';
+                document.getElementById('config-section').classList.remove('hidden');
+                document.getElementById('dashboard-content').classList.add('hidden');
+            };
+            document.head.appendChild(script);
+        };
+
+        window.initMap = function() {
+            const initialPos = { lat: 14.5995, lng: 120.9842 }; // Default center
+
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 12,
+                center: initialPos,
+                mapId: 'DEMO_MAP_ID', 
+                streetViewControl: false,
+            });
+
+            marker = new google.maps.Marker({
+                position: initialPos,
+                map: map,
+                title: 'Device Location',
+                icon: {
+                    path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                    scale: 6,
+                    fillColor: '#EF4444', 
+                    fillOpacity: 1,
+                    strokeWeight: 1,
+                    strokeColor: '#B91C1C',
+                }
+            });
+
+            // Start polling for data after map initialization
+            startDataPolling();
+        }
+
+        // --- User Interaction ---
+
+        window.saveApiKey = function() {
+            const input = document.getElementById('api-key-input').value.trim();
+            if (input) {
+                sessionStorage.setItem('googleMapsApiKey', input);
+                apiKey = input;
+                document.getElementById('config-message').textContent = '';
+                document.getElementById('config-section').classList.add('hidden');
+                document.getElementById('dashboard-content').classList.remove('hidden');
+                loadGoogleMapsScript();
+            } else {
+                document.getElementById('config-message').textContent = 'API Key cannot be empty.';
+            }
+        }
+
+        /**
+         * Helper function to manage the visual state and text of the alarm button.
+         * @param {boolean} isDisabled - Whether the button should be disabled.
+         * @param {string} statusText - The current status text (READY, TRIGGERING..., ERROR).
+         */
+        function updateAlarmUI(isDisabled, statusText) {
+            if (alarmButtonEl) {
+                alarmButtonEl.disabled = isDisabled;
+
+                // Handle button appearance based on state
+                if (isDisabled) {
+                    alarmButtonEl.classList.add('opacity-50', 'cursor-not-allowed');
+                    if (statusText.includes('TRIGGERING')) {
+                        alarmButtonEl.textContent = 'SENDING...';
+                        alarmButtonEl.classList.remove('bg-red-600', 'hover:bg-red-700');
+                        alarmButtonEl.classList.add('bg-gray-500');
+                    } else if (statusText.includes('TRIGGERED')) {
+                        alarmButtonEl.textContent = 'ALARM ACTIVE';
+                        alarmButtonEl.classList.remove('bg-red-600', 'hover:bg-red-700', 'bg-gray-500');
+                        alarmButtonEl.classList.add('bg-red-800');
+                    }
+                } else {
+                    // READY state
+                    alarmButtonEl.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-500', 'bg-red-800');
+                    alarmButtonEl.classList.add('bg-red-600', 'hover:bg-red-700');
+                    alarmButtonEl.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1.414a1 1 0 01.293.707l.636 1.347a1 1 0 001.096.64l2.062-.303a1 1 0 011.168.966v.831a1 1 0 01-.197.604l-.846.846a1 1 0 00-.293.707v1.414a1 1 0 00.293.707l.846.846a1 1 0 01.197.604v.831a1 1 0 01-1.168.966l-2.062-.303a1 1 0 00-1.096.64l-.636 1.347a1 1 0 01-.293.707V17a1 1 0 01-2 0v-1.414a1 1 0 01-.293-.707l-.636-1.347a1 1 0 00-1.096-.64l-2.062.303a1 1 0 01-1.168-.966v-.831a1 1 0 01.197-.604l.846-.846a1 1 0 00.293-.707v-1.414a1 1 0 00-.293-.707l-.846-.846a1 1 0 01-.197-.604V7.828a1 1 0 011.168-.966l2.062.303a1 1 0 001.096-.64l.636-1.347A1 1 0 019 3v-1a1 1 0 011-1zM10 8a2 2 0 100 4 2 2 0 000-4z" clip-rule="evenodd" />
+                        </svg>
+                        <span>TRIGGER ALARM</span>
+                    `;
+                }
+            }
+
+            // Update status text display
+            let colorClass = 'text-gray-600';
+            if (statusText === 'READY') {
+                colorClass = 'text-green-500';
+            } else if (statusText.includes('TRIGGERED') || statusText.includes('TRIGGERING')) {
+                colorClass = 'text-red-600';
+            } else if (statusText === 'ERROR') {
+                colorClass = 'text-red-500';
+            }
+
+            // Update the span element text and color
+            buzzerStateDisplayEl.className = `font-bold ${colorClass}`;
+            buzzerStateDisplayEl.textContent = statusText;
+
+            // Ensure the container text is correct
+            buzzerStatusContainerEl.textContent = `Alarm State: `;
+            if (buzzerStateDisplayEl.parentNode !== buzzerStatusContainerEl) {
+                 buzzerStatusContainerEl.appendChild(buzzerStateDisplayEl);
+            }
+        }
+
+
+        /**
+         * Sends a momentary command to trigger the alarm.
+         * Endpoint: POST /api/command/{device_id} with action: 'on' (or 'trigger')
+         */
+        window.triggerAlarm = async function() {
+            const action = 'on'; // 'on' used as a momentary trigger for the buzzer
+            
+            // Immediately disable and show processing state
+            updateAlarmUI(true, 'TRIGGERING...');
+
+            try {
+                const url = `${SERVER_URL}/api/command/${TRACKER_DEVICE_ID}`;
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action })
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                // Command successful: show triggered state temporarily (simulates 1.5s buzz)
+                updateAlarmUI(true, 'TRIGGERED (1.5s)');
+
+            } catch (e) {
+                console.error(`Error sending alarm command:`, e);
+                updateAlarmUI(true, 'ERROR'); // Show error state
+                
+            } finally {
+                // Re-enable button and reset status after delay
+                setTimeout(() => {
+                    updateAlarmUI(false, 'READY');
+                }, 3000); // 3-second delay before ready
+            }
+        }
+
+        // --- REST API Polling Logic ---
+
+        function startDataPolling() {
+            // Clear any existing timer just in case
+            if (dataPollingTimer) {
+                clearInterval(dataPollingTimer);
+            }
+            
+            // Immediately run the function, then run it every POLLING_INTERVAL_MS
+            fetchLatestData();
+            dataPollingTimer = setInterval(fetchLatestData, POLLING_INTERVAL_MS);
+        }
+
+        /**
+         * Fetches the latest GPS data from the REST API.
+         * Endpoint: GET /api/data/{device_id}
+         */
+        async function fetchLatestData() {
+            const url = `${SERVER_URL}/api/data/${TRACKER_DEVICE_ID}`;
+            
+            try {
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        // 404 means no data yet, but server is running
+                        connectionStatusEl.textContent = 'Server connected, but no data received from the tracker yet.';
+                        statusMessageEl.classList.remove('hidden');
+                        return;
+                    }
+                    throw new Error(`HTTP Error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                processTrackerData(data);
+
+            } catch (error) {
+                // This typically catches network errors (server not running) or JSON parsing errors
+                console.error("Fetch Data Error:", error);
+                connectionStatusEl.textContent = `🚨 Connection Error: Cannot reach server at ${SERVER_URL}. Is node server.js running?`;
+                statusMessageEl.classList.remove('hidden');
+                // Attempt to retry connection status check on the next interval
+            }
+        }
+        
+        /**
+         * Updates the UI and Map with the received data.
+         */
+        function processTrackerData(data) {
+            statusMessageEl.classList.add('hidden');
+
+            let lat = parseFloat(data.latitude);
+            let lng = parseFloat(data.longitude);
+            let rssi = data.rssi || '--';
+            
+            let timestamp = data.timestamp ? new Date(data.timestamp).toLocaleString() : 'N/A';
+
+            // --- UDM FALLBACK CHECK (assuming 14.588800 is the fallback for 'no fix') ---
+            const UDM_FALLBACK_LAT = 14.588800;
+            const isUDMFallback = (isNaN(lat) || isNaN(lng) || Math.abs(lat - UDM_FALLBACK_LAT) < 0.0001); 
+
+            let currentPos = { lat: lat, lng: lng };
+            
+            if (isUDMFallback) {
+                // UDM Fallback Mode
+                udmWarningEl.classList.remove('hidden');
+                latDisplayEl.textContent = 'Lat: NO FIX';
+                lngDisplayEl.textContent = 'Lng: NO FIX';
+                if (marker) marker.setOpacity(0.3); // Dim marker
+                
+            } else {
+                // Normal GPS Mode
+                udmWarningEl.classList.add('hidden');
+                if (marker) marker.setOpacity(1.0);
+
+                // Update UI Cards
+                latDisplayEl.textContent = `Lat: ${lat.toFixed(6)}`;
+                lngDisplayEl.textContent = `Lng: ${lng.toFixed(6)}`;
+
+                // Update Map Marker and Center
+                if (map && marker) {
+                    marker.setPosition(currentPos);
+                    map.setCenter(currentPos);
+                    map.setZoom(16); // Zoom in on the location
+                }
+            }
+
+            rssiDisplayEl.textContent = `${rssi} dBm`;
+            timeDisplayEl.textContent = timestamp;
+            connectionStatusEl.textContent = `Connected to REST API. Last updated: ${new Date().toLocaleTimeString()}.`;
+        }
+
+    </script>
+
+</body>
+</html>
